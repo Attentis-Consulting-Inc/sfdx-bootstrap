@@ -1,22 +1,34 @@
 #!/bin/bash
 
+bootstrap_url=https://github.com/Attentis-Consulting-Inc/sfdx-bootstrap/main
+validations_url=https://github.com/Attentis-Consulting-Inc/validation-scripts/main
+validations_filename=validation_scripts.zip
 pmd_version="7.0.0"
 pmd_file="pmd-dist-$pmd_version-bin.zip"
 pmd_dir="pmd-bin-$pmd_version"
 pmd_attentis_ruleset_url="https://raw.githubusercontent.com/Attentis-Consulting-Inc/pmd/main/ruleset.xml"
 
 # Guard for required commands and files
-[ -f sfdx-project.json ] || { echo "Must be run from the root of an sfdx project" >&2 && exit 1; }
 valid_reqs=true
 [ "$(command -v npm)" ] || { echo "Cannot find command npm. Is it installed?" >&2 && valid_reqs=false; }
+[ "$(command -v sf)" ] || { echo "Cannot find command sf. Is the Salesforce cli installed?" >&2 && valid_reqs=false; }
 [ "$(command -v jq)" ] || { echo "Cannot find command jq. Is it installed?" >&2 && valid_reqs=false; }
-[ "$(command -v sf)" ] || { echo "Cannot find command sf. Is the sf cli installed?" >&2 && valid_reqs=false; }
 
 [ $valid_reqs = true ] || { echo "" && echo "Some prerequisites not met. Please follow the setup instructions on the repository" >&2 && exit 1; }
 
-npm_installed_packages=$(npm ls -i)
+# Check if being run on an existing project, or prompt to create new one
+if [ ! -f sfdx-project.json ]; then
+    read -r -p "Not in an SFDX project. Create one here? (Y/n) " project_yn
+    [[ "$project_yn" == [Nn]* ]] && exit 0
+    project_name=
+    while [ -z "$project_name" ]; do
+        read -r -p "Enter the name of the project: " project_name
+    done
+    sf generate project -n "$project_name" || exit 1
+    cd "$project_name" || exit 1
+fi
 
-printf "\e[1;34m-----\n\u279C Setting up repository\n-----\e[0m\n"
+printf "\e[1;34m-----\n\u279C Git setup\n-----\e[0m\n"
 
 if [ -d .git ]; then
     printf "\e[1;33m\u2BC5\e[0m Project is already a git repository\n"
@@ -24,22 +36,24 @@ else
     git init >/dev/null && printf "\e[1;32m\u2713\e[0m Repository set up\n"
 fi
 
-if [ -f .gitignore-local ]; then
-    printf "\e[1;33m\u2BC5\e[0m Found a local git ignore file\n"
-else
-    ln -s .git/info/exclude .gitignore-local
-    echo ".gitignore-local" >.gitignore-local
-    printf "\e[1;32m\u2713\e[0m Created .gitignore-local file.\n"
-    printf "\e[1;33m\u0021\e[0m You can use this file to ignore files in git without committing changes to .gitignore\n"
+if [ -z "$WINDIR" ]; then # Don't try to create symlinks on Windows, as it depends on the Git bash installation
+    if [ -f .gitignore-local ]; then
+        printf "\e[1;33m\u2BC5\e[0m Found a local git ignore file\n"
+    else
+        ln -s .git/info/exclude .gitignore-local
+        echo ".gitignore-local" >.gitignore-local
+        printf "\e[1;32m\u2713\e[0m Created .gitignore-local file\n"
+        printf "\e[1;33m\u0021\e[0m You can use this file to ignore files in git without committing changes to .gitignore\n"
+    fi
 fi
 
 if [ -f .rgignore ]; then
     printf "\e[1;33m\u2BC5\e[0m Found a ripgrep ignore file\n"
 elif [ "$(command -v rg)" ]; then
     cp .gitignore .rgignore
-    echo ".rgignore" >>.gitignore-local
+    [ -f .gitignore-local ] && echo ".rgignore" >>.gitignore-local
 
-    printf "\e[1;32m\u2713\e[0m Found rg command and created .rgignore file.\n"
+    printf "\e[1;32m\u2713\e[0m Found rg command and created .rgignore file with .gitignore contents\n"
     printf "\e[1;33m\u0021\e[0m You can use this file to ignore files when using ripgrep\n"
 fi
 
@@ -48,12 +62,15 @@ if [ -f omnistudio-components.json ]; then
 else
     jq '[.packageDirectories[].path] | map ( { (.):[] } ) | add' sfdx-project.json >omnistudio-components.json
     printf "\e[1;32m\u2713\e[0m Created omnistudio-components.json file\n"
-    printf "\e[1;33m\u0021\e[0m You can use this file to list omnistudio lwcs in each project package, so they can be excluded from certain validations\n"
+    printf "\e[1;33m\u0021\e[0m You can use this file to list omnistudio LWCs in each project package, so they can be excluded from certain validations\n"
 fi
 
-printf "\e[1;34m-----\n\u279C Installing Prettier\n-----\e[0m\n"
+printf "\e[1;34m-----\n\u279C Installing project packages\n-----\e[0m\n"
+npm install -D
+npm_installed_packages=$(npm ls -i)
+
 prettier_installed=false
-(echo "$npm_installed_packages" | grep "prettier@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "prettier-plugin-apex@" >/dev/null 2>&1) && printf "\e[1;32m\u2713\e[0m Prettier and Apex plugin already installed\n" && prettier_installed=true
+(echo "$npm_installed_packages" | grep "prettier@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "prettier-plugin-apex@" >/dev/null 2>&1) && printf "\e[1;32m\u2713\e[0m Prettier and Apex plugin installed\n" && prettier_installed=true
 if [ $prettier_installed = false ]; then
     {
         npm install -D prettier prettier-plugin-apex &&
@@ -63,6 +80,7 @@ if [ $prettier_installed = false ]; then
 fi
 
 if [ $prettier_installed ]; then
+    printf "\e[1;33m\u0021\e[0m Setting up Apex rules for Prettier:\n"
     [ -f .prettierrc ] || echo "{\"trailingComma\": \"none\"}" >.prettierrc
     if ! jq -e '.overrides[]' .prettierrc &>/dev/null; then
         temp_prettierrc=$(mktemp)
@@ -73,7 +91,7 @@ if [ $prettier_installed ]; then
         temp_prettierrc=$(mktemp)
         jq '.overrides += [{"files": "*.{cls,trigger}"}]' .prettierrc >"$temp_prettierrc"
         mv -- "$temp_prettierrc" .prettierrc
-        printf "\e[1;32m\u2713\e[0m Created Prettier rules for Apex\n"
+        printf "\t\e[1;32m\u2713\e[0m Created Prettier rules for Apex\n"
     fi
     if ! jq -e '.overrides[] | select(.files=="*.{cls,trigger}").options' .prettierrc &>/dev/null; then
         temp_prettierrc=$(mktemp)
@@ -84,69 +102,118 @@ if [ $prettier_installed ]; then
         temp_prettierrc=$(mktemp)
         jq '.overrides = [.overrides[] | select(.files=="*.{cls,trigger}").options.tabWidth = 4]' .prettierrc >"$temp_prettierrc"
         mv -- "$temp_prettierrc" .prettierrc
-        printf "\e[1;32m\u2713\e[0m Set up tabWidth of 4 for Apex\n"
+        printf "\t\e[1;32m\u2713\e[0m Set up tabWidth of 4 for Apex\n"
     fi
     if [ ! "$(jq -e '.overrides[] | select(.files=="*.{cls,trigger}").options.printWidth' .prettierrc 2>/dev/null)" = "120" ]; then
         temp_prettierrc=$(mktemp)
         jq '.overrides = [.overrides[] | select(.files=="*.{cls,trigger}").options.printWidth = 120]' .prettierrc >"$temp_prettierrc"
         mv -- "$temp_prettierrc" .prettierrc
-        printf "\e[1;32m\u2713\e[0m Set up printWidth of 120 for Apex\n"
+        printf "\t\e[1;32m\u2713\e[0m Set up printWidth of 120 for Apex\n"
     fi
+    printf "\t\e[1;32m\u2713\e[0m .prettierrc is set up with Apex rules\n"
+fi
 
-    printf "\n\e[1;32m\u2713\e[0m .prettierrc set up for Apex rules\n"
+setup_lwc=false
+{ (echo "$npm_installed_packages" | grep "eslint@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@lwc/eslint-plugin-lwc@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/eslint-config-lwc@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/eslint-plugin-aura@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/eslint-plugin-lightning@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/sfdx-lwc-jest" >/dev/null 2>&1); } || setup_lwc=true
+
+if $setup_lwc; then
+    sf force lightning lwc test setup
+fi
+printf "\n\e[1;32m\u2713\e[0m ESLint and Jest installed\n"
+
+printf "\e[1;34m-----\n\u279C Setting up sa11y/jest and required canvas dependency\n-----\e[0m\n"
+packages_to_install=
+(echo "$npm_installed_packages" | grep "@sa11y/jest@" >/dev/null 2>&1) || packages_to_install+="@sa11y/jest "
+
+(echo "$npm_installed_packages" | grep "canvas@" >/dev/null 2>&1) || packages_to_install+="canvas "
+
+if [ -n "$packages_to_install" ]; then
+    { echo "$packages_to_install" | xargs npm install -D && printf "\e[1;32m\u2713\e[0m sa11y/jest and canvas installed.\n"; } || printf "\n\e[1;31m\u274C\e[0m Failed to install @sa11y/jest or canvas. Check errors and try again.\n"
+else
+    printf "\e[1;32m\u2713\e[0m sa11y/jest and canvas already installed.\n"
+fi
+
+mkdir -p jest/setupFiles
+
+if [ -f jest/setupFiles/sa11y-setup.js ]; then
+    printf "\e[1;32m\u2713\e[0m sa11y setup file already exists\n"
+else
+    printf "\e[1;33m\u2BC5\e[0m Downloading sa11y-setup.js\n"
+    curl -L "$bootstrap_url"/jest/setupFiles/sa11y-setup.js -o jest/setupFiles/sa11y-setup.js
+    printf "\e[1;32m\u2713\e[0m Created jest/setupFiles/sa11y-setup.js. Make sure it is called from jest.config.js\n"
+fi
+
+if [ -f jest/setupFiles/setEnvVars.js ]; then
+    printf "\e[1;32m\u2713\e[0m setEnvVars.js file for jest already exists\n"
+else
+    printf "\e[1;33m\u2BC5\e[0m Downloading setEnvVars.js\n"
+    curl -L "$bootstrap_url"/jest/setupFiles/setEnvVars.js -o jest/setupFiles/setEnvVars.js
+    printf "\e[1;32m\u2713\e[0m Created jest/setupFiles/setEnvVars.js using the extended ruleset. Make sure it is called from jest.config.js\n"
+fi
+
+write_jestconfig=false
+if [ -f jest.config.js ]; then
+    echo
+    read -r -p "Jest config file (jest.config.js) already exists. Overwrite it to include the sa11y and omnistudio-components.json configurations? Only do this on a new project, or if you're sure of what you're doing. (y/N) " jest_yn
+    echo
+    [[ "$jest_yn" == [Yy]* ]] && write_jestconfig=true
+else
+    write_jestconfig=true
+fi
+
+if $write_jestconfig; then
+    printf "\e[1;33m\u2BC5\e[0m Downloading jest.config.js\n"
+    curl -L "$bootstrap_url"/jest.config.js -o jest.config.js
+    printf "\e[1;32m\u2713\e[0m jest.config.js overwritten\n"
 fi
 
 printf "\e[1;34m-----\n\u279C Setting up PMD\n-----\e[0m\n"
 
-mkdir -p pmd/rulesets
 install_pmd=false
 [ -f pmd/bin/pmd ] || install_pmd=true
 if [ "$(command -v pmd)" ] && [ $install_pmd = true ]; then
-    read -r -p "Found global pmd command, set up local binary anyways? (y/N): " yn
-    [[ "$yn" == [Yy]* ]] || install_pmd=false
+    read -r -p "Found global pmd command, set up local binary anyways? (y/N): " pmd_yn
+    echo
+    [[ "$pmd_yn" == [Yy]* ]] || install_pmd=false
 fi
 
-if [ $install_pmd ]; then
+if $install_pmd; then
     printf "\e[1;33m\u2BC5\e[0m Downloading PMD v%s\n" $pmd_version
     curl -LO https://github.com/pmd/pmd/releases/download/pmd_releases%2F"$pmd_version"/"$pmd_file" --no-verbose || echo "Failed to download pmd. Check errors and try again to complete PMD setup." >&2
-    [ -f "$pmd_file" ] && unzip "$pmd_file" -q && mv "$pmd_dir" pmd && rm -f "$pmd_file" && printf "\n\e[1;32m\u2713\e[0m Local PMD binary set up\n"
+    [ -f "$pmd_file" ] && unzip -q "$pmd_file" && mv "$pmd_dir" pmd && rm -f "$pmd_file" && printf "\n\e[1;32m\u2713\e[0m Local PMD binary set up\n"
 else
     printf "\e[1;32m\u2713\e[0m PMD binary already exists\n"
 fi
 
+mkdir -p pmd/rulesets
 download_ruleset=false
 [ -f pmd/rulesets/apex.xml ] || download_ruleset=true
 if [ -f "$HOME"/.config/pmd/rulesets/apex.xml ] && [ $download_ruleset = true ]; then
-    read -r -p "Found global Apex PMD ruleset. Copy that one instead of downloading? (y/N): " yn
-    if [[ "$yn" == [Yy]* ]]; then
+    read -r -p "Found global Apex PMD ruleset. Copy that one instead of downloading? (y/N): " rules_yn
+    echo
+    if [[ "$rules_yn" == [Yy]* ]]; then
         cp "$HOME"/.config/pmd/rulesets/apex.xml pmd/rulesets/
         download_ruleset=false
     fi
 fi
 
-if [ $download_ruleset ]; then
-    printf "\e[1;33m\u2BC5\e[0m Downloading Attentis ruleset\n"
+if $download_ruleset; then
+    printf "\e[1;33m\u2BC5\e[0m Downloading PMD ruleset\n"
     curl -L "$pmd_attentis_ruleset_url" -o pmd/rulesets/apex.xml --no-verbose || echo "Failed to download ruleset. Check errors and try again to complete ruleset setup." >&2
 else
     printf "\e[1;32m\u2713\e[0m Apex ruleset for PMD already exists\n"
 fi
 
-printf "\e[1;34m-----\n\u279C Setting up ESLint and Jest\n-----\e[0m\n"
-setup_lwc=false
-{ (echo "$npm_installed_packages" | grep "eslint@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@lwc/eslint-plugin-lwc@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/eslint-config-lwc@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/eslint-plugin-aura@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/eslint-plugin-lightning@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "@salesforce/sfdx-lwc-jest" >/dev/null 2>&1); } || setup_lwc=true
-
-if [ $setup_lwc = true ]; then
-    sf force lightning lwc test setup && printf "\n\e[1;32m\u2713\e[0m ESLint and Jest set up\n"
+printf "\e[1;34m-----\n\u279C Setting up validation scripts\n-----\e[0m\n"
+if [ ! -d validation_scripts ]; then
+    printf "\e[1;33m\u2BC5\e[0m Downloading latest version of validation scripts\n"
+    downloaded_scripts=true
+    curl -LO "$validations_url"/releases/download/latest/validation_scripts.zip || { echo "Failed to download validation scripts. Check errors and try again to complete setup." >&2 && downloaded_scripts=false; }
+    if $downloaded_scripts; then
+        unzip -q "$validations_filename" -d validation_scripts
+        rm -f "$validations_filename"
+        printf "\e[1;32m\u2713\e[0m Validation scripts installed\n"
+    fi
 else
-    printf "\e[1;32m\u2713\e[0m All required ESLint and Jest packages already exist\n"
-fi
-
-printf "\e[1;34m-----\n\u279C Setting up sa11y\n-----\e[0m\n"
-setup_sa11y=false
-(echo "$npm_installed_packages" | grep "@sa11y/jest@" >/dev/null 2>&1) || setup_sa11y=true
-
-if [ $setup_sa11y = true ]; then
-    npm install -D @sa11y/jest || printf "\n\e[1;31m\u274C\e[0m Failed to install @sa11y/jest. Check errors and try again.\n"
-else
-    printf "\e[1;32m\u2713\e[0m sa11y/jest already installed.\n"
+    printf "\e[1;32m\u2713\e[0m Validation scripts directory already exists\n"
 fi
