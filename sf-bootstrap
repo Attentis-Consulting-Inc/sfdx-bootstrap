@@ -181,15 +181,7 @@ fi
 
 printf "\n\e[1;34m-----\n\u279C Setting up PMD\n-----\e[0m\n"
 
-install_pmd=false
-[ -f pmd/bin/pmd ] || install_pmd=true
-if [ "$(command -v pmd)" ] && [ $install_pmd = true ]; then
-    read -r -p "Found global pmd command, set up local binary anyways? (y/N): " pmd_yn
-    echo
-    [[ "$pmd_yn" == [Yy]* ]] || install_pmd=false
-fi
-
-if $install_pmd; then
+if [ ! -f pmd/bin/pmd ]; then
     printf "\e[1;33m\u2BC5\e[0m Downloading PMD v%s\n" $pmd_version
     curl -LO https://github.com/pmd/pmd/releases/download/pmd_releases%2F"$pmd_version"/"$pmd_file" || echo "Failed to download pmd. Check errors and try again to complete PMD setup." >&2
     [ -f "$pmd_file" ] && unzip -q "$pmd_file" && mv "$pmd_dir" pmd && rm -f "$pmd_file" && printf "\n\e[1;32m\u2713\e[0m Local PMD binary set up\n"
@@ -198,18 +190,8 @@ else
 fi
 
 mkdir -p pmd/rulesets
-download_ruleset=false
-[ -f pmd/rulesets/apex.xml ] || download_ruleset=true
-if [ -f "$HOME"/.config/pmd/rulesets/apex.xml ] && [ $download_ruleset = true ]; then
-    read -r -p "Found global Apex PMD ruleset. Copy that one instead of downloading? (y/N): " rules_yn
-    echo
-    if [[ "$rules_yn" == [Yy]* ]]; then
-        cp "$HOME"/.config/pmd/rulesets/apex.xml pmd/rulesets/
-        download_ruleset=false
-    fi
-fi
 
-if $download_ruleset; then
+if [ ! -f pmd/rulesets/apex.xml ]; then
     printf "\e[1;33m\u2BC5\e[0m Downloading PMD ruleset\n"
     curl -L "$pmd_attentis_ruleset_url" -o pmd/rulesets/apex.xml || echo "Failed to download ruleset. Check errors and try again to complete ruleset setup." >&2
     printf "\n\e[1;32m\u2713\e[0m Apex ruleset for PMD created\n"
