@@ -1,0 +1,29 @@
+{
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+    "**/.sfdx": true
+  },
+  "salesforcedx-vscode-core.retrieve-test-code-coverage": true,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "apexPMD.runOnFileOpen": true,
+  "apexPMD.pmdBinPath": "pmd",
+  "apexPMD.rulesets": [
+    "pmd/rulesets/apex.xml"
+  ],
+  "jest.runMode": "on-demand",
+  "[apex]": {
+    "editor.indentSize": 4,
+    "editor.tabSize": 4
+  },
+  "[javascript]": {
+    "editor.indentSize": 2,
+    "editor.tabSize": 2
+  },
+  "[json]": {
+    "editor.indentSize": 2,
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
