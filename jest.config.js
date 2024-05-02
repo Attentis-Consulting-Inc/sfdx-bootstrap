@@ -1,5 +1,20 @@
 const { jestConfig } = require('@salesforce/sfdx-lwc-jest/config');
 
+let omnistudioComponents;
+try {
+  omnistudioComponents = require("./omnistudio-components.json");
+} catch {
+  omnistudioComponents = {};
+}
+
+const coveragePathIgnorePatterns = [];
+Object.entries(omnistudioComponents).forEach(([app, components]) => {
+  const rootPath = `<rootDir >/${app}/main/default/lwc/`;
+  components.forEach((component) => {
+    coveragePathIgnorePatterns.push(`${rootPath}${component}/`);
+  });
+});
+
 const setupFiles = jestConfig.setupFiles || [];
 setupFiles.push('<rootDir>/jest/setupFiles/setEnvVars.js');
 
@@ -10,6 +25,7 @@ module.exports = {
   ...jestConfig,
   setupFiles,
   setupFilesAfterEnv,
+  coveragePathIgnorePatterns,
   modulePathIgnorePatterns: ['<rootDir>/.localdevserver'],
   coverageThreshold: {
     global: {
