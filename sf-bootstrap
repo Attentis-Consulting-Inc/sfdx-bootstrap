@@ -1,11 +1,11 @@
 #!/bin/bash
 
 bootstrap_url=https://github.com/Attentis-Consulting-Inc/sfdx-bootstrap/archive/main.zip
-bootstrap_tmp_file=tmp/sfdx-bootstrap.zip
-bootstrap_tmp_dir=tmp/sfdx-bootstrap
+bootstrap_tmp_file=/tmp/sfdx-bootstrap.zip
+bootstrap_tmp_dir=/tmp/sfdx-bootstrap-main
 default_files_dir=.default_sfdx_files
 
-validations_url=https://github.com/Attentis-Consulting-Inc/validation-scripts/main
+validations_url=https://github.com/Attentis-Consulting-Inc/validation-scripts
 validations_filename=validation_scripts.zip
 
 pmd_version="7.0.0"
@@ -37,10 +37,10 @@ fi
 
 printf "\e[1;34m-----\n\u279C Gathering bootstrap files\n-----\e[0m\n"
 curl -JL "$bootstrap_url" -o "$bootstrap_tmp_file" || { echo "Failed to download bootstrap files. Check errors and try again" >&2 && exit 1; }
-unzip -q "$bootstrap_tmp_file" -d "$bootstrap_tmp_dir"
+unzip -q "$bootstrap_tmp_file" -d /tmp
 trap "rm -rf $bootstrap_tmp_dir $bootstrap_tmp_file" EXIT
 
-printf "\e[1;34m-----\n\u279C Git setup\n-----\e[0m\n"
+printf "\n\e[1;34m-----\n\u279C Git setup\n-----\e[0m\n"
 
 if [ -d .git ]; then
     printf "\e[1;33m\u2BC5\e[0m Project is already a git repository\n"
@@ -77,12 +77,12 @@ else
     printf "\e[1;33m\u0021\e[0m You can use this file to list omnistudio LWCs in each project package, so they can be excluded from certain validations\n"
 fi
 
-printf "\e[1;34m-----\n\u279C Installing project packages\n-----\e[0m\n"
+printf "\n\e[1;34m-----\n\u279C Installing project packages\n-----\e[0m\n"
 npm install -D
 npm_installed_packages=$(npm ls -i)
 
 prettier_installed=false
-(echo "$npm_installed_packages" | grep "prettier@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "prettier-plugin-apex@" >/dev/null 2>&1) && printf "\e[1;32m\u2713\e[0m Prettier and Apex plugin installed\n" && prettier_installed=true
+(echo "$npm_installed_packages" | grep "prettier@" >/dev/null 2>&1) && (echo "$npm_installed_packages" | grep "prettier-plugin-apex@" >/dev/null 2>&1) && printf "\n\e[1;32m\u2713\e[0m Prettier and Apex plugin installed\n" && prettier_installed=true
 if [ $prettier_installed = false ]; then
     {
         npm install -D prettier prettier-plugin-apex &&
@@ -139,14 +139,14 @@ if $setup_lwc; then
 fi
 printf "\n\e[1;32m\u2713\e[0m ESLint and Jest installed\n"
 
-printf "\e[1;34m-----\n\u279C Setting up sa11y/jest and required canvas dependency\n-----\e[0m\n"
+printf "\n\e[1;34m-----\n\u279C Setting up sa11y/jest and required canvas dependency\n-----\e[0m\n"
 packages_to_install=
 (echo "$npm_installed_packages" | grep "@sa11y/jest@" >/dev/null 2>&1) || packages_to_install+="@sa11y/jest "
 
 (echo "$npm_installed_packages" | grep "canvas@" >/dev/null 2>&1) || packages_to_install+="canvas "
 
 if [ -n "$packages_to_install" ]; then
-    { echo "$packages_to_install" | xargs npm install -D && printf "\e[1;32m\u2713\e[0m sa11y/jest and canvas installed.\n"; } || printf "\n\e[1;31m\u274C\e[0m Failed to install @sa11y/jest or canvas. Check errors and try again.\n"
+    { echo "$packages_to_install" | xargs npm install -D && printf "\n\e[1;32m\u2713\e[0m sa11y/jest and canvas installed.\n"; } || printf "\n\e[1;31m\u274C\e[0m Failed to install @sa11y/jest or canvas. Check errors and try again.\n"
 else
     printf "\e[1;32m\u2713\e[0m sa11y/jest and canvas already installed.\n"
 fi
@@ -179,7 +179,7 @@ if $write_jestconfig; then
     printf "\e[1;32m\u2713\e[0m jest.config.js written\n"
 fi
 
-printf "\e[1;34m-----\n\u279C Setting up PMD\n-----\e[0m\n"
+printf "\n\e[1;34m-----\n\u279C Setting up PMD\n-----\e[0m\n"
 
 install_pmd=false
 [ -f pmd/bin/pmd ] || install_pmd=true
@@ -212,25 +212,26 @@ fi
 if $download_ruleset; then
     printf "\e[1;33m\u2BC5\e[0m Downloading PMD ruleset\n"
     curl -L "$pmd_attentis_ruleset_url" -o pmd/rulesets/apex.xml || echo "Failed to download ruleset. Check errors and try again to complete ruleset setup." >&2
+    printf "\n\e[1;32m\u2713\e[0m Apex ruleset for PMD created\n"
 else
     printf "\e[1;32m\u2713\e[0m Apex ruleset for PMD already exists\n"
 fi
 
-printf "\e[1;34m-----\n\u279C Setting up validation scripts\n-----\e[0m\n"
+printf "\n\e[1;34m-----\n\u279C Setting up validation scripts\n-----\e[0m\n"
 if [ ! -d validation_scripts ]; then
     printf "\e[1;33m\u2BC5\e[0m Downloading latest version of validation scripts\n"
     downloaded_scripts=true
-    curl -LO "$validations_url"/releases/download/latest/validation_scripts.zip || { echo "Failed to download validation scripts. Check errors and try again to complete setup." >&2 && downloaded_scripts=false; }
+    curl -LO "$validations_url"/releases/latest/download/validation_scripts.zip || { echo "Failed to download validation scripts. Check errors and try again to complete setup." >&2 && downloaded_scripts=false; }
     if $downloaded_scripts; then
         unzip -q "$validations_filename" -d validation_scripts
         rm -f "$validations_filename"
-        printf "\e[1;32m\u2713\e[0m Validation scripts installed\n"
+        printf "\n\e[1;32m\u2713\e[0m Validation scripts installed\n"
     fi
 else
     printf "\e[1;32m\u2BC5\e[0m Validation scripts directory already exists. Skipping.\n"
 fi
 
-printf "\e[1;34m-----\n\u279C Setting up VSCode environment\n-----\e[0m\n"
+printf "\n\e[1;34m-----\n\u279C Setting up VSCode environment\n-----\e[0m\n"
 
 vscode=true
 [ "$(command -v code)" ] || { printf "\e[1;33m\u0021\e[0m VSCode not found, skipping\n" && vscode=false; }
@@ -247,9 +248,9 @@ if $vscode; then
     fi
 
     if [ ! -f .vscode/settings.json ] || $new_project || cmp -s .vscode/settings.json "$bootstrap_tmp_dir"/"$default_files_dir"/settings.json; then
-        printf "\e[1;33m\u2BC5\e[0m Customized .vscode/settings.json file found. Not overwriting.\n"
-    else
         cp "$bootstrap_tmp_dir"/.vscode/settings.json .vscode
         printf "\e[1;32m\u2713\e[0m VSCode recommended settings written to local file\n"
+    else
+        printf "\e[1;33m\u2BC5\e[0m Customized .vscode/settings.json file found. Not overwriting.\n"
     fi
 fi

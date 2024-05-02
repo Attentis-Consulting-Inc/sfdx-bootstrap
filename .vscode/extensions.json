@@ -6,7 +6,6 @@
     "esbenp.prettier-vscode",
     "financialforce.lana",
     "chuckjonas.apex-pmd",
-    "orta.vscode-jest",
-    "some.other.extension"
+    "orta.vscode-jest"
   ]
 }
