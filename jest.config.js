@@ -9,7 +9,7 @@ try {
 
 const coveragePathIgnorePatterns = [];
 Object.entries(omnistudioComponents).forEach(([app, components]) => {
-  const rootPath = `<rootDir >/${app}/main/default/lwc/`;
+  const rootPath = `<rootDir>/${app}/main/default/lwc/`;
   components.forEach((component) => {
     coveragePathIgnorePatterns.push(`${rootPath}${component}/`);
   });
