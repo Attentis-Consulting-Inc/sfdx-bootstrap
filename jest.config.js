@@ -32,7 +32,7 @@ module.exports = {
       statements: 80,
       lines: 80
     },
-    './force-app/main/default/lwc/**/*.js': {
+    './*/main/default/lwc/**/*.js': {
       statements: 65,
       lines: 65
     }
