@@ -151,6 +151,11 @@ else
     printf "\e[1;32m\u2713\e[0m sa11y/jest and canvas already installed.\n"
 fi
 
+if [[ "$OSTYPE" == darwin* ]]; then
+    printf "\n\e[1;33m\u2BC5\e[0m macOS detected as OS. Installing extra required dependencies for sa11y\n"
+    arch -arm64 brew install pkg-config cairo pango libpng jpeg giflib librsvg || printf "\e[1;31m\u274C\e[0m Failed to install sa11y required dependencies for macOS. Check errors and try again if needed.\n" >&2
+fi
+
 mkdir -p jest/setupFiles
 
 if [ -f jest/setupFiles/sa11y-setup.js ]; then
